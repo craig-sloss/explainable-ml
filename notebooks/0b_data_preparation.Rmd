@@ -27,7 +27,9 @@ library(CASdatasets)
 library(tidyverse)
 ```
 
-# Load and explore data
+# Data preparation
+
+## Load and explore data
 
 We will create a severity model using the "fremotorclaim" data from the CASdatasets pacakage. (Note that there are three versions of each dataset, labelled a, b, and c, that correspond to different random samples of the data. For our purpose we will use the "a" dataset.) Load and preview the severity data:
 
@@ -49,5 +51,55 @@ fremotor1prem0304a %>% head()
 
 ```{r}
 dim(fremotor1prem0304a)
+```
+
+## Modify data
+
+Because the premium dataset contains multiple years of data for some policies, identify the accident year in the severity dataset so that we can join on policy characteristics for the right year. (Note that this is imprecise because the year in the policy dataset is likely the policy year, and claims occurring in 2003 could be based on a 2002 policy -- however, for the purpose of demonstrating the functionality of the DALEX package this will be a reasonable dataset.)
+```{r}
+fremotor1sev0304a = fremotor1sev0304a %>%
+  mutate(Year = year(OccurDate))
+```
+
+Merge the datasets:
+```{r}
+modelling_data_initial = fremotor1sev0304a %>%
+  left_join(fremotor1prem0304a)
+```
+
+Claims that occurred in 2004 on policies written in 2003 may not correspond to records in the premium dataset, and won't get any policy characteristics joined using the above logic. Identify the severity records that do not have associated policy data, using DrivAge as a way to identify when the policy data is missing. By setting the Year to 2003 instead, we can join policy characteristics from 2003.
+
+```{r}
+records_with_missing_predictors = modelling_data_initial %>% 
+  filter(is.na(DrivAge)) %>%
+  mutate(Year = 2003) %>%
+  select(IDpol, OccurDate, Payment, IDclaim, Guarantee, Year)
+```
+
+```{r}
+modelling_data_missing = records_with_missing_predictors %>%
+  left_join(fremotor1prem0304a)
+```
+
+Now, combined the two datasets and impute remaining missing values:
+```{r}
+modelling_data_final = modelling_data_initial %>%
+  filter(!is.na(DrivAge)) %>%
+  bind_rows(modelling_data_missing) %>%
+  mutate(MaritalStatus = ifelse(is.na(MaritalStatus), "Unknown", as.character(MaritalStatus)) %>% as.factor(),
+         JobCode = ifelse(is.na(JobCode), "Unknown", as.character(JobCode)) %>% as.factor())
+saveRDS(modelling_data_final, "../data/severity_modelling_data.rds")
+```
+
+## Summary of modelling dataset
+
+Confirm there are no missing values:
+```{r}
+sum(is.na(modelling_data_final))
+```
+
+
+```{r}
+summary(modelling_data_final)
 ```
 
