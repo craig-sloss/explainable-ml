@@ -1,0 +1,114 @@
+---
+title: "Interpreting Machine Learning Models - Variable Importance"
+author: "Craig A. Sloss"
+date: "2023-05-14"
+output: html_document
+---
+
+# Introduction and Setup
+
+Settings for this notebook:
+
+* Code will be printed along with the outcome of running that code
+
+* Turn off scientific notation
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999)
+set.seed(12345)
+```
+
+Load packages used in this notebook. Please ensure that you have run the script 0a_install_packages.R prior to running this code chunk.
+
+```{r}
+library(tidyverse)
+library(DALEX)
+library(xgboost)
+```
+
+Load the dataset that was prepared in the notebook 0b_data_preparation.Rmd, and preview it:
+```{r}
+severity_modelling_data = readRDS("../data/severity_modelling_data.rds")
+severity_modelling_data %>% head()
+```
+
+# Fit Sample Models
+
+Create a list of all predictors available in the data:
+```{r}
+full_predictor_set = c("DrivAge",
+                       "DrivGender",
+                       "MaritalStatus",
+                       "BonusMalus",
+                       "PayFreq",
+                       "JobCode",
+                       "VehAge",
+                       "VehClass",
+                       "VehPower",
+                       "VehGas",
+                       "VehUsage",
+                       "Garage",
+                       "Area",
+                       "Marketing")
+```
+
+This is a convenience function that will fit a Gradient Boosted Machine, using the xgboost package, given a list of predictors. The model is fit using the severity modelling dataset loaded above. Because the purpose of this work is to create sample models that can be used to illustrate the use of the DALEX package, these models are not tuned or validated on holdout data. (Note that by not tuning the hyperparameters, this ensures they are the same for all models being compared.) The function outputs the model along with the data and response used to fit the model, as these are needed later.
+
+```{r}
+fit_gbm = function(variable_list) {
+  formula = paste0("Payment ~ 0 + ", paste0(variable_list, collapse = " + ")) %>% as.formula
+  xgb_response = severity_modelling_data$Payment
+  xgb_matrix = model.matrix(formula, severity_modelling_data)
+  sample_model = xgboost(data = xgb_matrix,
+                         label = xgb_response,
+                         max_depth = 2,
+                         eta = 0.01,
+                         nrounds = 60)
+  return(list(model = sample_model, data = xgb_matrix, response = xgb_response))
+}
+```
+
+```{r}
+sample_model_full = fit_gbm(full_predictor_set)
+```
+
+## Remove-and-Compare Approach
+
+Create a comparison model that removes driver age from the list of predictors, and compare the training RMSE to the original model:
+
+```{r}
+sample_model_no_driver_age = fit_gbm(setdiff(full_predictor_set, "DrivAge"))
+```
+
+```{r}
+sample_model_no_veh_age = fit_gbm(setdiff(full_predictor_set, "VehAge"))
+```
+
+# Variable Importance
+
+## Using DALEX
+
+The first step in using DALEX is to create an "explain" object, based on the model, data, and response:
+
+```{r}
+gbm_explainer = explain(model = sample_model_full$model,
+                        data = sample_model_full$data,
+                        y = sample_model_full$response)
+```
+
+The model_parts function is used to produce permutation importance results. The argument "N" is the size of the sample used for variable importance; if it is NULL then the entire dataset is used. (This is reasonable for such a small dataset such as the one in this case study, but for larger datasets we would want to specify a number of observations here so that the calculation does is not too time-consuming.)
+
+```{r}
+sample_model_importance = model_parts(gbm_explainer, type = "variable_importance", N = NULL)
+plot(sample_model_importance, max_vars = 7, show_boxplots = FALSE)
+```
+
+## Using xgboost built-in importance measure
+
+The xgboost package also has a bulit-in importance measure that is calculated, while the model is being fit, based on the improvement in performance attributable to a variable at each iteration of the fitting algorithm, rather than using permutation importance. This has the advantage of being faster, but its limitation is that it cannot be used on models other than xgboost models. 
+
+```{r}
+xgb.importance(model = sample_model_full$model)
+```
+
