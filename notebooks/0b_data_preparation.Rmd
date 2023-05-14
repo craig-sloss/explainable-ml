@@ -1,0 +1,53 @@
+---
+title: "Data Preparation for Explainable Machine Learning Microlearning Series"
+author: "Craig A. Sloss"
+date: "2023-05-14"
+output: html_document
+---
+
+# Introduction
+
+This notebook prepares data that can be used to demonstrate the functionality of R packages for explaining machine learning models.
+
+Settings for this notebook:
+
+* Code will be printed along with the outcome of running that code
+
+* Turn off scientific notation
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999)
+```
+
+Load packages used in this notebook. Please ensure that you have run the script 0a_install_packages.R prior to running this code chunk.
+
+```{r}
+library(CASdatasets)
+library(tidyverse)
+```
+
+# Load and explore data
+
+We will create a severity model using the "fremotorclaim" data from the CASdatasets pacakage. (Note that there are three versions of each dataset, labelled a, b, and c, that correspond to different random samples of the data. For our purpose we will use the "a" dataset.) Load and preview the severity data:
+
+```{r}
+data(fremotor1sev0304a)
+fremotor1sev0304a %>% head()
+```
+
+```{r}
+dim(fremotor1sev0304a)
+```
+
+
+The premium dataset will be the source of most of our predictor variables:
+```{r}
+data("fremotor1prem0304a")
+fremotor1prem0304a %>% head()
+```
+
+```{r}
+dim(fremotor1prem0304a)
+```
+
